@@ -66,7 +66,9 @@ def test_compute_highwater_with_custom_names(backend):
 
     derived_resources = [{"name": "custom_highwater", "type": "qubits", "calculate": custom_compute_highwater}]
     compiled_routine = compile_routine(input_routine, derived_resources=derived_resources, backend=backend).routine
+    from bartiq import evaluate
 
+    compiled_routine = evaluate(compiled_routine, {}).routine
     assert str(compiled_routine.resources["custom_highwater"].value) == "N + 5"
 
 

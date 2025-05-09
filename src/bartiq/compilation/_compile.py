@@ -242,17 +242,18 @@ def _process_repeated_resources(
         assert resource_name in child_resources
         assert backend.serialize(resource.value) == f"{children[0].name}.{resource.name}"
     for resource in child_resources.values():
+        replacement_val = backend.as_expression(f"{children[0].name}.{resource.name}")
         if resource.type == ResourceType.additive:
-            new_value = repetition.sequence_sum(resource.value, backend)
+            new_value = repetition.sequence_sum(replacement_val, backend)
         elif resource.type == ResourceType.multiplicative:
-            new_value = repetition.sequence_prod(resource.value, backend)
+            new_value = repetition.sequence_prod(replacement_val, backend)
         elif resource.type == ResourceType.qubits and repetition.sequence.type == "constant":
             # NOTE: Actually this could also be `new_value = resource.value`.
             # The reason it's not, is that in such case local_ancillae are counted twice
             # in calculate_highwater.
             continue
         elif ast.literal_eval(os.environ.get(REPETITION_ALLOW_ARBITRARY_RESOURCES_ENV, "False")):
-            new_value = resource.value
+            new_value = replacement_val
             warnings.warn(
                 f'Can\'t process resource "{resource.name}" of type "{resource.type}" in repetitive structure.'
                 "Passing its value as is without modifications. "
@@ -368,7 +369,12 @@ def _compile(
         repetition=repetition,
         children_order=routine.children_order,
     )
-    return _add_derived_resources(compiled_routine, backend, derived_resources)
+    return _add_derived_resources(
+        compiled_routine,
+        backend,
+        parameter_map[None],
+        derived_resources,
+    )
 
 
 def _accepts_resource_name(func: Calculate[T] | CalculateWithName[T]) -> TypeIs[CalculateWithName[T]]:
@@ -378,6 +384,7 @@ def _accepts_resource_name(func: Calculate[T] | CalculateWithName[T]) -> TypeIs[
 def _add_derived_resources(
     routine: CompiledRoutine[T],
     backend: SymbolicBackend[T],
+    inputs: dict[str, TExpr[T]],
     derived_resources: Iterable[DerivedResources[T]] = (),
 ) -> CompiledRoutine[T]:
     for specs in derived_resources:
@@ -392,7 +399,7 @@ def _add_derived_resources(
         )
 
         if value is not None:
-            resource = Resource(name, type=ResourceType(type), value=value)
+            resource = Resource(name, type=ResourceType(type), value=backend.substitute(value, inputs))
             routine = replace(
                 routine,
                 resources={

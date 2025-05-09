@@ -60,7 +60,7 @@ def calculate_highwater(
         inflow = _inflow(child, backend)
         outflow = _outflow(child, backend)
 
-        watermarks.append(active_flow - inflow + child.resources[resource_name].value)
+        watermarks.append(active_flow - inflow + backend.as_expression(f"{child.name}.{resource_name}"))
         active_flow = active_flow - inflow + outflow
 
     watermarks.append(_outflow(routine, backend))
